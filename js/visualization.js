@@ -101,6 +101,7 @@ World.add(world, dividers);
 // Load Pokemon data
 let pokemonData = [];
 let pokemonBodies = [];
+let filteredData = null;
 
 // Create a runner
 const runner = Runner.create();
@@ -116,11 +117,20 @@ d3.csv('data/pokedex.csv').then(data => {
 
 function createPokemonBall(pokemon, x, y) {
     const radius = 10;
+    let color = getTypeColor(pokemon.type_1);
+    // Legendary level coloring
+    if (pokemon.is_mythical === 'True' || pokemon.is_mythical === 'true' || pokemon.is_mythical === '1') {
+        color = '#C71585'; // Mythical: MediumVioletRed
+    } else if (pokemon.is_legendary === 'True' || pokemon.is_legendary === 'true' || pokemon.is_legendary === '1') {
+        color = '#FFD700'; // Legendary: Gold
+    } else if (pokemon.is_sub_legendary === 'True' || pokemon.is_sub_legendary === 'true' || pokemon.is_sub_legendary === '1') {
+        color = '#1E90FF'; // Sub-Legendary: DodgerBlue
+    }
     const ball = Bodies.circle(x, y, radius, {
         restitution: 0.5,
         friction: 0.1,
         render: {
-            fillStyle: getTypeColor(pokemon.Type_1),
+            fillStyle: color,
             strokeStyle: '#000000',
             lineWidth: 1
         },
@@ -154,7 +164,9 @@ function getTypeColor(type) {
 }
 
 function startAnimation() {
-    if (!pokemonData || pokemonData.length === 0) {
+    // If filteredData is null, use all data. If not, use filtered.
+    const dataToUse = filteredData === null ? pokemonData : filteredData;
+    if (!dataToUse || dataToUse.length === 0) {
         console.log('No Pokemon data loaded yet');
         return;
     }
@@ -165,10 +177,10 @@ function startAnimation() {
     });
     pokemonBodies = [];
 
-    console.log('Starting animation with', pokemonData.length, 'Pokemon');
+    console.log('Starting animation with', dataToUse.length, 'Pokemon');
 
     // Create and add pokemon balls
-    pokemonData.forEach((pokemon, i) => {
+    dataToUse.forEach((pokemon, i) => {
         setTimeout(() => {
             // Parse generation number (1-8) from correct field
             let generation = 1;
@@ -209,6 +221,23 @@ function reset() {
 // Event listeners
 document.getElementById('startBtn').addEventListener('click', startAnimation);
 document.getElementById('resetBtn').addEventListener('click', reset);
+
+// Filter buttons
+document.getElementById('filterSubLegendary').addEventListener('click', function () {
+    filteredData = pokemonData.filter(p => p.is_sub_legendary === 'True' || p.is_sub_legendary === 'true' || p.is_sub_legendary === '1');
+    reset();
+    startAnimation();
+});
+document.getElementById('filterLegendary').addEventListener('click', function () {
+    filteredData = pokemonData.filter(p => p.is_legendary === 'True' || p.is_legendary === 'true' || p.is_legendary === '1');
+    reset();
+    startAnimation();
+});
+document.getElementById('filterMythical').addEventListener('click', function () {
+    filteredData = pokemonData.filter(p => p.is_mythical === 'True' || p.is_mythical === 'true' || p.is_mythical === '1');
+    reset();
+    startAnimation();
+});
 
 // Start the renderer
 Render.run(render);
