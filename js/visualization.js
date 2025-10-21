@@ -211,8 +211,40 @@ function buildLegend() {
 // Tooltip handling using D3
 const tooltip = d3.select('#tooltip');
 function showTooltip(evt, p) {
+    const rarityStatus = p.is_mythical === 'True' ? 'Mythical' :
+        p.is_legendary === 'True' ? 'Legendary' :
+            p.is_sub_legendary === 'True' ? 'Sub-Legendary' : 'Normal';
+
     tooltip.style('display', 'block')
-        .html(`<strong>${p.name}</strong><br/>Gen ${p.generation}`)
+        .html(`
+            <div style="border-bottom: 1px solid #555; margin-bottom: 8px; padding-bottom: 5px;">
+                <strong style="font-size: 16px;">${p.name}</strong>
+                <div style="color: #aaa;">Generation ${p.generation}</div>
+            </div>
+            <div class="tooltip-row">
+                <span>Species:</span>
+                <span>${p.species}</span>
+            </div>
+            <div class="tooltip-row">
+                <span>Type:</span>
+                <span>${p.type_1}${p.type_2 ? ' / ' + p.type_2 : ''}</span>
+            </div>
+            <div class="tooltip-row">
+                <span>HP:</span>
+                <span>${p.hp}</span>
+            </div>
+            <div class="tooltip-row">
+                <span>Attack:</span>
+                <span>${p.attack}</span>
+            </div>
+            <div class="tooltip-row">
+                <span>Defense:</span>
+                <span>${p.defense}</span>
+            </div>
+            <div style="margin-top: 8px; color: ${rarityScale(rarityFor(p))};">
+                ${rarityStatus}
+            </div>
+        `)
         .style('left', (evt.clientX + 10) + 'px')
         .style('top', (evt.clientY + 10) + 'px');
 }

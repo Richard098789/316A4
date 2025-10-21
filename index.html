@@ -24,6 +24,25 @@
             position: relative;
         }
 
+        #tooltip {
+            position: absolute;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            border-radius: 5px;
+            pointer-events: none;
+            display: none;
+            z-index: 1000;
+            font-size: 14px;
+            max-width: 200px;
+        }
+
+        .tooltip-row {
+            margin: 5px 0;
+            display: flex;
+            justify-content: space-between;
+        }
+
         #controls {
             margin: 20px 0;
             text-align: center;
@@ -47,6 +66,7 @@
 </head>
 
 <body>
+    <div id="tooltip"></div>
     <h1 style="text-align:center; margin-top:20px; font-size:2em; color:#333;">Pokemon Generations & Legendary Status
         Visualization</h1>
     <div id="controls">
