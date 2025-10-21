@@ -50,13 +50,17 @@
     <h1 style="text-align:center; margin-top:20px; font-size:2em; color:#333;">Pokemon Generations & Legendary Status
         Visualization</h1>
     <div id="controls">
-        <button id="startBtn" disabled>Start Animation</button>
+        <button id="startBtn" disabled>GO!</button>
         <button id="resetBtn">Reset</button>
         <button id="filterSubLegendary">Sub-Legendary</button>
         <button id="filterLegendary">Legendary</button>
         <button id="filterMythical">Mythical</button>
     </div>
+    <div id="legend" class="legend" aria-hidden="false" style="position:relative; margin-bottom:10px;"></div>
     <div id="canvas-container"></div>
+    <div id="tooltip"
+        style="position:absolute; pointer-events:none; background:rgba(0,0,0,0.8); color:white; padding:6px 8px; border-radius:4px; font-size:13px; display:none; z-index:1000;">
+    </div>
     <script src="js/visualization.js"></script>
 </body>
 

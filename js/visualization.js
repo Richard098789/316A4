@@ -60,6 +60,31 @@ const walls = [
 // Add walls to world
 World.add(world, walls);
 
+// Add mouse control for tooltips
+const mouse = Matter.Mouse.create(render.canvas);
+const mouseConstraint = Matter.MouseConstraint.create(engine, {
+    mouse: mouse,
+    constraint: {
+        stiffness: 0.2,
+        render: { visible: false }
+    }
+});
+World.add(world, mouseConstraint);
+
+// Listen for mouse clicks on bodies
+Matter.Events.on(mouseConstraint, 'mousedown', function (event) {
+    const mousePos = event.mouse.position;
+    const bodies = Composite.allBodies(world);
+    const found = bodies.find(b => Matter.Bounds.contains(b.bounds, mousePos) && !b.isStatic && b.pokemon);
+    if (found && found.pokemon) {
+        // Use event.mouse.sourceEvents.mousemove for coords if available
+        const evt = { clientX: event.mouse.absolute.x, clientY: event.mouse.absolute.y };
+        showTooltip(evt, found.pokemon);
+    } else {
+        hideTooltip();
+    }
+});
+
 // Create generation dividers (vertical lines)
 const numGenerations = 8; // Pokemon has generations 1-8
 const dividerWidth = width / numGenerations;
@@ -111,20 +136,24 @@ Runner.run(runner, engine);
 d3.csv('data/pokedex.csv').then(data => {
     console.log('Data loaded:', data.length, 'Pokemon');
     pokemonData = data;
+    // build legend using d3
+    buildLegend();
 }).catch(error => {
     console.error('Error loading Pokemon data:', error);
 });
 
 function createPokemonBall(pokemon, x, y) {
-    const radius = 10;
-    let color = getTypeColor(pokemon.type_1);
-    // Legendary level coloring
+    const radius = 15; // larger for visibility
+    // Use only four colors representing rarity level (mythical, legendary, sub-legendary, normal)
+    let color;
     if (pokemon.is_mythical === 'True' || pokemon.is_mythical === 'true' || pokemon.is_mythical === '1') {
-        color = '#C71585'; // Mythical: MediumVioletRed
+        color = '#FF0066'; // Mythical (bright pink)
     } else if (pokemon.is_legendary === 'True' || pokemon.is_legendary === 'true' || pokemon.is_legendary === '1') {
-        color = '#FFD700'; // Legendary: Gold
+        color = '#FFD700'; // Legendary (gold)
     } else if (pokemon.is_sub_legendary === 'True' || pokemon.is_sub_legendary === 'true' || pokemon.is_sub_legendary === '1') {
-        color = '#1E90FF'; // Sub-Legendary: DodgerBlue
+        color = '#00BFFF'; // Sub-Legendary (deep sky blue)
+    } else {
+        color = '#808080'; // Normal (gray)
     }
     const ball = Bodies.circle(x, y, radius, {
         restitution: 0.5,
@@ -137,6 +166,58 @@ function createPokemonBall(pokemon, x, y) {
         pokemon: pokemon
     });
     return ball;
+}
+
+// D3 color scale for rarity
+const rarityScale = d3.scaleOrdinal()
+    .domain(['mythical', 'legendary', 'sub', 'normal'])
+    .range(['#FF0066', '#FFD700', '#00BFFF', '#808080']);
+
+function rarityFor(p) {
+    if (!p) return 'normal';
+    if (p.is_mythical === 'True' || p.is_mythical === 'true' || p.is_mythical === '1') return 'mythical';
+    if (p.is_legendary === 'True' || p.is_legendary === 'true' || p.is_legendary === '1') return 'legendary';
+    if (p.is_sub_legendary === 'True' || p.is_sub_legendary === 'true' || p.is_sub_legendary === '1') return 'sub';
+    return 'normal';
+}
+
+function buildLegend() {
+    const legend = d3.select('#legend');
+    const items = ['mythical', 'legendary', 'sub', 'normal'];
+    legend.html('');
+    const list = legend.selectAll('.legend-item')
+        .data(items)
+        .enter()
+        .append('div')
+        .attr('class', 'legend-item')
+        .style('display', 'inline-block')
+        .style('margin-right', '12px')
+        .style('font-size', '14px');
+
+    list.append('span')
+        .attr('class', 'legend-color')
+        .style('display', 'inline-block')
+        .style('width', '14px')
+        .style('height', '14px')
+        .style('background', d => rarityScale(d))
+        .style('border-radius', '50%')
+        .style('margin-right', '6px')
+        .style('vertical-align', 'middle');
+
+    list.append('span')
+        .text(d => d.charAt(0).toUpperCase() + d.slice(1));
+}
+
+// Tooltip handling using D3
+const tooltip = d3.select('#tooltip');
+function showTooltip(evt, p) {
+    tooltip.style('display', 'block')
+        .html(`<strong>${p.name}</strong><br/>Gen ${p.generation}`)
+        .style('left', (evt.clientX + 10) + 'px')
+        .style('top', (evt.clientY + 10) + 'px');
+}
+function hideTooltip() {
+    tooltip.style('display', 'none');
 }
 
 function getTypeColor(type) {
@@ -163,6 +244,21 @@ function getTypeColor(type) {
     return typeColors[type] || '#999999';
 }
 
+// Return numeric rarity level for sorting/grouping: 4=mythical, 3=legendary, 2=sub-legendary, 1=normal
+function getLegendaryLevel(pokemon) {
+    if (!pokemon) return 1;
+    if (pokemon.is_mythical === 'True' || pokemon.is_mythical === 'true' || pokemon.is_mythical === '1') {
+        return 4;
+    }
+    if (pokemon.is_legendary === 'True' || pokemon.is_legendary === 'true' || pokemon.is_legendary === '1') {
+        return 3;
+    }
+    if (pokemon.is_sub_legendary === 'True' || pokemon.is_sub_legendary === 'true' || pokemon.is_sub_legendary === '1') {
+        return 2;
+    }
+    return 1;
+}
+
 function startAnimation() {
     // If filteredData is null, use all data. If not, use filtered.
     const dataToUse = filteredData === null ? pokemonData : filteredData;
@@ -177,10 +273,19 @@ function startAnimation() {
     });
     pokemonBodies = [];
 
-    console.log('Starting animation with', dataToUse.length, 'Pokemon');
+    // Sort by legendary level so same-colored balls drop together (mythical -> legendary -> sub -> normal)
+    const sortedData = [...dataToUse].sort((a, b) => {
+        const la = getLegendaryLevel(a);
+        const lb = getLegendaryLevel(b);
+        if (lb !== la) return lb - la; // descending: higher level (rarer) first
+        // tie-breaker: by generation
+        return (parseInt(a.generation) || 0) - (parseInt(b.generation) || 0);
+    });
 
-    // Create and add pokemon balls
-    dataToUse.forEach((pokemon, i) => {
+    console.log('Starting animation with', sortedData.length, 'Pokemon (grouped by rarity)');
+
+    // Create and add pokemon balls grouped by rarity
+    sortedData.forEach((pokemon, i) => {
         setTimeout(() => {
             // Parse generation number (1-8) from correct field
             let generation = 1;
@@ -198,14 +303,20 @@ function startAnimation() {
             pokemonBodies.push(ball);
             Composite.add(world, ball);
 
+            // attach simple mouse click to show tooltip (use Matter events)
+            ball.mouse = { pokemon };
+            ball.onClick = function (evt) {
+                showTooltip(evt, pokemon);
+            };
+
             // Apply random initial velocity
             Body.setVelocity(ball, {
-                x: (Math.random() - 0.5) * 3, // Slightly more horizontal spread
-                y: 3 + Math.random() * 2 // More consistent downward velocity
+                x: (Math.random() - 0.5) * 3,
+                y: 3 + Math.random() * 2
             });
 
             console.log(`Added Pokemon ${pokemon.name} at generation ${generation + 1}`);
-        }, i * 20); // Much faster firing rate (20ms instead of 100ms)
+        }, i * 20);
     });
 }
 
