@@ -291,6 +291,7 @@ function getLegendaryLevel(pokemon) {
     return 1;
 }
 
+let animationTimeouts = [];
 function startAnimation() {
     // If filteredData is null, use all data. If not, use filtered.
     const dataToUse = filteredData === null ? pokemonData : filteredData;
@@ -300,10 +301,7 @@ function startAnimation() {
     }
 
     // Clear existing pokemon bodies
-    pokemonBodies.forEach(body => {
-        Composite.remove(world, body);
-    });
-    pokemonBodies = [];
+    reset();
 
     // Sort by legendary level so same-colored balls drop together (mythical -> legendary -> sub -> normal)
     const sortedData = [...dataToUse].sort((a, b) => {
@@ -318,7 +316,7 @@ function startAnimation() {
 
     // Create and add pokemon balls grouped by rarity
     sortedData.forEach((pokemon, i) => {
-        setTimeout(() => {
+        const timeoutID = setTimeout(() => {
             // Parse generation number (1-8) from correct field
             let generation = 1;
             try {
@@ -349,11 +347,14 @@ function startAnimation() {
 
             console.log(`Added Pokemon ${pokemon.name} at generation ${generation + 1}`);
         }, i * 20);
+        animationTimeouts.push(timeoutID);
     });
 }
 
 function reset() {
     // Remove all pokemon bodies
+    animationTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
+    animationTimeouts = [];
     pokemonBodies.forEach(body => {
         Composite.remove(world, body);
     });
@@ -381,7 +382,10 @@ document.getElementById('filterMythical').addEventListener('click', function () 
     reset();
     startAnimation();
 });
-
+document.getElementById('startBtn').addEventListener('click', function () {
+    filteredData = null;
+    startAnimation();
+});
 // Start the renderer
 Render.run(render);
 
