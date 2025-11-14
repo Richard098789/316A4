@@ -1,407 +1,259 @@
-// Initialize Matter.js modules
-const Engine = Matter.Engine,
-    Render = Matter.Render,
-    Runner = Matter.Runner,
-    World = Matter.World,
-    Bodies = Matter.Bodies,
-    Body = Matter.Body,
-    Composite = Matter.Composite;
+// Main Visualization Orchestrator
+// Coordinates all modules to create the Pokemon visualization
 
-// Create engine and world
-const engine = Engine.create({
-    positionIterations: 6,
-    velocityIterations: 4
-});
-const world = engine.world;
-
-// Adjust gravity
-engine.gravity.y = 0.5;
-
-// Get container dimensions
-const container = document.getElementById('canvas-container');
-const width = container.clientWidth;
-const height = container.clientHeight;
-
-// Create renderer
-const render = Render.create({
-    element: container,
-    engine: engine,
-    options: {
-        width: width,
-        height: height,
-        wireframes: false,
-        background: '#ffffff'
+(function() {
+    // Initialize Physics Engine
+    const physics = PhysicsEngine.initialize();
+    if (!physics) {
+        console.error('Failed to initialize Physics Engine');
+        return;
     }
-});
+    
+    const { engine, world, render, width, dividerWidth } = physics;
+    const { Bodies, Body, Composite, Query } = physics;
 
-// Create walls with extended height and thickness
-const wallThickness = 100;
-const walls = [
-    Bodies.rectangle(width / 2, height + wallThickness / 2, width, wallThickness, {
-        isStatic: true,
-        render: {
-            fillStyle: '#666666'
-        }
-    }), // bottom
-    Bodies.rectangle(-wallThickness / 2, height / 2, wallThickness, height + 200, {
-        isStatic: true,
-        render: {
-            fillStyle: '#666666'
-        }
-    }), // left
-    Bodies.rectangle(width + wallThickness / 2, height / 2, wallThickness, height + 200, {
-        isStatic: true,
-        render: {
-            fillStyle: '#666666'
-        }
-    }), // right
-];
-
-// Add walls to world
-World.add(world, walls);
-
-// Add mouse control for tooltips
-const mouse = Matter.Mouse.create(render.canvas);
-const mouseConstraint = Matter.MouseConstraint.create(engine, {
-    mouse: mouse,
-    constraint: {
-        stiffness: 0.2,
-        render: { visible: false }
-    }
-});
-World.add(world, mouseConstraint);
-
-// Listen for mouse clicks on bodies
-Matter.Events.on(mouseConstraint, 'mousedown', function (event) {
-    const mousePos = event.mouse.position;
-    const bodies = Composite.allBodies(world);
-    const found = bodies.find(b => Matter.Bounds.contains(b.bounds, mousePos) && !b.isStatic && b.pokemon);
-    if (found && found.pokemon) {
-        // Use event.mouse.sourceEvents.mousemove for coords if available
-        const evt = { clientX: event.mouse.absolute.x, clientY: event.mouse.absolute.y };
-        showTooltip(evt, found.pokemon);
-    } else {
-        hideTooltip();
-    }
-});
-
-// Create generation dividers (vertical lines)
-const numGenerations = 8; // Pokemon has generations 1-8
-const dividerWidth = width / numGenerations;
-const dividers = [];
-
-// Make dividers taller by extending beyond the visible area
-const dividerHeight = height + 200; // Added extra height
-
-for (let i = 1; i < numGenerations; i++) {
-    const divider = Bodies.rectangle(
-        i * dividerWidth,
-        height / 2,
-        4, // Made slightly thicker
-        dividerHeight,
-        {
-            isStatic: true,
-            render: {
-                fillStyle: '#cccccc'
-            }
-        }
-    );
-    dividers.push(divider);
-}
-
-// Add generation labels
-const labels = [];
-for (let i = 0; i < numGenerations; i++) {
-    const label = document.createElement('div');
-    label.style.position = 'absolute';
-    label.style.left = `${i * dividerWidth + dividerWidth / 2 - 20}px`;
-    label.style.bottom = '10px';
-    label.style.textAlign = 'center';
-    label.innerHTML = `Gen ${i + 1}`;
-    container.appendChild(label);
-}
-
-World.add(world, dividers);
-
-// Load Pokemon data
-let pokemonData = [];
-let pokemonBodies = [];
-let filteredData = null;
-
-// Create a runner
-const runner = Runner.create();
-Runner.run(runner, engine);
-
-// Load the Pokemon data
-d3.csv('data/pokedex.csv').then(data => {
-    console.log('Data loaded:', data.length, 'Pokemon');
-    pokemonData = data;
-    // build legend using d3
-    buildLegend();
-}).catch(error => {
-    console.error('Error loading Pokemon data:', error);
-});
-
-function createPokemonBall(pokemon, x, y) {
-    const radius = 15; // larger for visibility
-    // Use only four colors representing rarity level (mythical, legendary, sub-legendary, normal)
-    let color;
-    if (pokemon.is_mythical === 'True' || pokemon.is_mythical === 'true' || pokemon.is_mythical === '1') {
-        color = '#FF0066'; // Mythical (bright pink)
-    } else if (pokemon.is_legendary === 'True' || pokemon.is_legendary === 'true' || pokemon.is_legendary === '1') {
-        color = '#FFD700'; // Legendary (gold)
-    } else if (pokemon.is_sub_legendary === 'True' || pokemon.is_sub_legendary === 'true' || pokemon.is_sub_legendary === '1') {
-        color = '#00BFFF'; // Sub-Legendary (deep sky blue)
-    } else {
-        color = '#808080'; // Normal (gray)
-    }
-    const ball = Bodies.circle(x, y, radius, {
-        restitution: 0.5,
-        friction: 0.1,
-        render: {
-            fillStyle: color,
-            strokeStyle: '#000000',
-            lineWidth: 1
-        },
-        pokemon: pokemon
-    });
-    return ball;
-}
-
-// D3 color scale for rarity
-const rarityScale = d3.scaleOrdinal()
-    .domain(['mythical', 'legendary', 'sub', 'normal'])
-    .range(['#FF0066', '#FFD700', '#00BFFF', '#808080']);
-
-function rarityFor(p) {
-    if (!p) return 'normal';
-    if (p.is_mythical === 'True' || p.is_mythical === 'true' || p.is_mythical === '1') return 'mythical';
-    if (p.is_legendary === 'True' || p.is_legendary === 'true' || p.is_legendary === '1') return 'legendary';
-    if (p.is_sub_legendary === 'True' || p.is_sub_legendary === 'true' || p.is_sub_legendary === '1') return 'sub';
-    return 'normal';
-}
-
-function buildLegend() {
-    const legend = d3.select('#legend');
-    const items = ['mythical', 'legendary', 'sub', 'normal'];
-    legend.html('');
-    const list = legend.selectAll('.legend-item')
-        .data(items)
-        .enter()
-        .append('div')
-        .attr('class', 'legend-item')
-        .style('display', 'inline-block')
-        .style('margin-right', '12px')
-        .style('font-size', '14px');
-
-    list.append('span')
-        .attr('class', 'legend-color')
-        .style('display', 'inline-block')
-        .style('width', '14px')
-        .style('height', '14px')
-        .style('background', d => rarityScale(d))
-        .style('border-radius', '50%')
-        .style('margin-right', '6px')
-        .style('vertical-align', 'middle');
-
-    list.append('span')
-        .text(d => d.charAt(0).toUpperCase() + d.slice(1));
-}
-
-// Tooltip handling using D3
-const tooltip = d3.select('#tooltip');
-function showTooltip(evt, p) {
-    const rarityStatus = p.is_mythical === 'True' ? 'Mythical' :
-        p.is_legendary === 'True' ? 'Legendary' :
-            p.is_sub_legendary === 'True' ? 'Sub-Legendary' : 'Normal';
-
-    tooltip.style('display', 'block')
-        .html(`
-            <div style="border-bottom: 1px solid #555; margin-bottom: 8px; padding-bottom: 5px;">
-                <strong style="font-size: 16px;">${p.name}</strong>
-                <div style="color: #aaa;">Generation ${p.generation}</div>
-            </div>
-            <div class="tooltip-row">
-                <span>Species:</span>
-                <span>${p.species}</span>
-            </div>
-            <div class="tooltip-row">
-                <span>Type:</span>
-                <span>${p.type_1}${p.type_2 ? ' / ' + p.type_2 : ''}</span>
-            </div>
-            <div class="tooltip-row">
-                <span>HP:</span>
-                <span>${p.hp}</span>
-            </div>
-            <div class="tooltip-row">
-                <span>Attack:</span>
-                <span>${p.attack}</span>
-            </div>
-            <div class="tooltip-row">
-                <span>Defense:</span>
-                <span>${p.defense}</span>
-            </div>
-            <div style="margin-top: 8px; color: ${rarityScale(rarityFor(p))};">
-                ${rarityStatus}
-            </div>
-        `)
-        .style('left', (evt.clientX + 10) + 'px')
-        .style('top', (evt.clientY + 10) + 'px');
-}
-function hideTooltip() {
-    tooltip.style('display', 'none');
-}
-
-function getTypeColor(type) {
-    const typeColors = {
-        'Normal': '#A8A878',
-        'Fire': '#F08030',
-        'Water': '#6890F0',
-        'Electric': '#F8D030',
-        'Grass': '#78C850',
-        'Ice': '#98D8D8',
-        'Fighting': '#C03028',
-        'Poison': '#A040A0',
-        'Ground': '#E0C068',
-        'Flying': '#A890F0',
-        'Psychic': '#F85888',
-        'Bug': '#A8B820',
-        'Rock': '#B8A038',
-        'Ghost': '#705898',
-        'Dragon': '#7038F8',
-        'Dark': '#705848',
-        'Steel': '#B8B8D0',
-        'Fairy': '#EE99AC'
-    };
-    return typeColors[type] || '#999999';
-}
-
-// Return numeric rarity level for sorting/grouping: 4=mythical, 3=legendary, 2=sub-legendary, 1=normal
-function getLegendaryLevel(pokemon) {
-    if (!pokemon) return 1;
-    if (pokemon.is_mythical === 'True' || pokemon.is_mythical === 'true' || pokemon.is_mythical === '1') {
-        return 4;
-    }
-    if (pokemon.is_legendary === 'True' || pokemon.is_legendary === 'true' || pokemon.is_legendary === '1') {
-        return 3;
-    }
-    if (pokemon.is_sub_legendary === 'True' || pokemon.is_sub_legendary === 'true' || pokemon.is_sub_legendary === '1') {
-        return 2;
-    }
-    return 1;
-}
-
-let animationTimeouts = [];
-function startAnimation() {
-    // If filteredData is null, use all data. If not, use filtered.
-    const dataToUse = filteredData === null ? pokemonData : filteredData;
-    if (!dataToUse || dataToUse.length === 0) {
-        console.log('No Pokemon data loaded yet');
+    // Verify Bodies is valid
+    if (!Bodies || typeof Bodies.circle !== 'function') {
+        console.error('Bodies object is invalid:', Bodies);
         return;
     }
 
-    // Clear existing pokemon bodies
-    reset();
+    // Initialize Pokemon Ball module with color scale
+    const rarityScale = PokemonBall.createRarityScale();
+    PokemonBall.initialize(Bodies, rarityScale);
 
-    // Sort by legendary level so same-colored balls drop together (mythical -> legendary -> sub -> normal)
-    const sortedData = [...dataToUse].sort((a, b) => {
-        const la = getLegendaryLevel(a);
-        const lb = getLegendaryLevel(b);
-        if (lb !== la) return lb - la; // descending: higher level (rarer) first
-        // tie-breaker: by generation
-        return (parseInt(a.generation) || 0) - (parseInt(b.generation) || 0);
-    });
+    // Initialize Legend
+    Legend.initialize(rarityScale);
 
-    console.log('Starting animation with', sortedData.length, 'Pokemon (grouped by rarity)');
+    // Initialize Tooltip
+    Tooltip.initialize(rarityScale, PokemonBall.rarityFor);
 
-    // Create and add pokemon balls grouped by rarity
-    sortedData.forEach((pokemon, i) => {
-        const timeoutID = setTimeout(() => {
-            // Parse generation number (1-8) from correct field
-            let generation = 1;
-            try {
-                generation = Math.max(1, Math.min(8, parseInt(pokemon.generation)));
-                generation = generation - 1; // Convert to 0-based index for position calculation
-            } catch (e) {
-                console.warn(`Invalid generation for ${pokemon.name}, defaulting to Gen 1`);
-                generation = 0;
+    // Initialize Pokemon Info Display with filter callback
+    // Note: BattleAnalyzer will be initialized after data loads
+    PokemonInfo.initialize(rarityScale, PokemonBall.rarityFor, 
+        function(pokemonIds, filterType) {
+            // Callback when battle filter button is clicked
+            DataLoader.filterByPokemonIds(pokemonIds);
+            reset();
+            startAnimation();
+            console.log(`Filtered to show ${pokemonIds.length} Pokemon (${filterType})`);
+        },
+        function(pokemon) {
+            // Callback when "View Win Rate by Type" button is clicked
+            showBattleVisualization(pokemon);
+        }
+    );
+
+    // Setup color manipulation functions for interactions
+    // Note: Interactions module will handle its own color functions
+    // We just need to provide the functions that interactions can use
+    const colorFunctions = {
+        resetBodyColor: function(body) {
+            if (body && body.originalColor) {
+                body.render.fillStyle = body.originalColor;
             }
+        },
+        darkenBodyColor: function(body) {
+            if (body && body.originalColor) {
+                // Use D3 to darken color
+                const color = d3.rgb(body.originalColor);
+                const darkened = d3.rgb(
+                    Math.max(0, color.r - (color.r * 0.3)),
+                    Math.max(0, color.g - (color.g * 0.3)),
+                    Math.max(0, color.b - (color.b * 0.3))
+                ).toString();
+                body.render.fillStyle = darkened;
+            }
+        }
+    };
 
-            // Calculate x position based on generation
-            const x = (generation * dividerWidth) + (dividerWidth / 2);
-            const ball = createPokemonBall(pokemon, x, 20); // Start higher up
-            pokemonBodies.push(ball);
-            Composite.add(world, ball);
+    // Initialize Interactions
+    Interactions.initialize(
+        world,
+        render,
+        Composite,
+        Query,
+        Body,
+        colorFunctions,
+        {
+            showTooltip: Tooltip.showTooltip,
+            hideTooltip: Tooltip.hideTooltip
+        },
+        function(pokemon) {
+            // Callback when Pokemon is clicked - update left panel
+            PokemonInfo.displayPokemon(pokemon);
+        }
+    );
 
-            // attach simple mouse click to show tooltip (use Matter events)
-            ball.mouse = { pokemon };
-            ball.onClick = function (evt) {
-                showTooltip(evt, pokemon);
-            };
+    // Initialize Animation
+    Animation.initialize(
+        world,
+        Composite,
+        Body,
+        function(pokemon, x, y) {
+            return PokemonBall.createPokemonBall(pokemon, x, y);
+        },
+        dividerWidth,
+        Tooltip.showTooltip
+    );
 
-            // Apply random initial velocity
-            Body.setVelocity(ball, {
-                x: (Math.random() - 0.5) * 3,
-                y: 3 + Math.random() * 2
-            });
+    // Load data and initialize
+    DataLoader.loadData().then((pokemonData) => {
+        // Initialize Battle Analyzer with loaded Pokemon data
+        BattleAnalyzer.initialize(pokemonData);
+        
+        // Load combat data
+        BattleAnalyzer.loadCombatData().then((combatData) => {
+            console.log('Combat data loaded successfully');
+            
+            // Initialize Battle Visualization
+            BattleVisualization.initialize('#battle-visualization-container', pokemonData, combatData);
+        }).catch(error => {
+            console.error('Failed to load combat data:', error);
+        });
 
-            console.log(`Added Pokemon ${pokemon.name} at generation ${generation + 1}`);
-        }, i * 20);
-        animationTimeouts.push(timeoutID);
+        Legend.buildLegend();
+        DataLoader.checkDataLoaded(() => {
+            document.getElementById('startBtn').disabled = false;
+        });
     });
-}
 
-function reset() {
-    // Remove all pokemon bodies
-    animationTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
-    animationTimeouts = [];
-    pokemonBodies.forEach(body => {
-        Composite.remove(world, body);
-    });
-    pokemonBodies = [];
-    console.log('Reset completed - all Pokemon removed');
-}
-
-// Event listeners
-document.getElementById('startBtn').addEventListener('click', startAnimation);
-document.getElementById('resetBtn').addEventListener('click', reset);
-
-// Filter buttons
-document.getElementById('filterSubLegendary').addEventListener('click', function () {
-    filteredData = pokemonData.filter(p => p.is_sub_legendary === 'True' || p.is_sub_legendary === 'true' || p.is_sub_legendary === '1');
-    reset();
-    startAnimation();
-});
-document.getElementById('filterLegendary').addEventListener('click', function () {
-    filteredData = pokemonData.filter(p => p.is_legendary === 'True' || p.is_legendary === 'true' || p.is_legendary === '1');
-    reset();
-    startAnimation();
-});
-document.getElementById('filterMythical').addEventListener('click', function () {
-    filteredData = pokemonData.filter(p => p.is_mythical === 'True' || p.is_mythical === 'true' || p.is_mythical === '1');
-    reset();
-    startAnimation();
-});
-document.getElementById('startBtn').addEventListener('click', function () {
-    filteredData = null;
-    startAnimation();
-});
-// Start the renderer
-Render.run(render);
-
-// Log when everything is initialized
-console.log('Visualization initialized');
-
-// Function to check if data is loaded
-function checkDataLoaded() {
-    if (pokemonData && pokemonData.length > 0) {
-        console.log('Pokemon data loaded successfully');
-        document.getElementById('startBtn').disabled = false;
-    } else {
-        console.log('Waiting for Pokemon data to load...');
-        setTimeout(checkDataLoaded, 1000);
+    // Navigation functions
+    function showBattleVisualization(pokemon) {
+        // Hide main view
+        document.getElementById('main-container').style.display = 'none';
+        document.getElementById('legend').style.display = 'none';
+        document.getElementById('controls').style.display = 'none';
+        document.querySelector('h1').style.display = 'none';
+        
+        // Show battle visualization view
+        document.getElementById('battle-visualization-view').style.display = 'block';
+        
+        // Display the visualization
+        BattleVisualization.display(pokemon);
     }
-}
 
-// Start checking for data
-checkDataLoaded();
+    function showMainView() {
+        // Hide battle visualization view
+        document.getElementById('battle-visualization-view').style.display = 'none';
+        
+        // Show main view
+        document.getElementById('main-container').style.display = 'flex';
+        document.getElementById('legend').style.display = 'block';
+        document.getElementById('controls').style.display = 'block';
+        document.querySelector('h1').style.display = 'block';
+    }
+
+    // Back button event listener (set up after DOM is ready)
+    setTimeout(() => {
+        const backBtn = document.getElementById('back-btn');
+        if (backBtn) {
+            backBtn.addEventListener('click', showMainView);
+        }
+    }, 100);
+
+    // Animation control functions
+    function startAnimation() {
+        const pokemonData = DataLoader.getPokemonData();
+        const filteredData = DataLoader.getFilteredData();
+        Animation.startAnimation(pokemonData, filteredData, PokemonBall.getLegendaryLevel);
+    }
+
+    function reset() {
+        Animation.reset(Interactions.resetHover);
+        // Reset enlargement state when visualization resets
+        if (Interactions && Interactions.resetEnlargement) {
+            Interactions.resetEnlargement();
+        }
+        // Note: Left panel info is independent and should not be cleared on reset
+    }
+
+    // Event listeners for buttons
+    document.getElementById('startBtn').addEventListener('click', function() {
+        DataLoader.clearFilter();
+        startAnimation();
+    });
+
+    document.getElementById('resetBtn').addEventListener('click', reset);
+
+    // Filter buttons
+    document.getElementById('filterNormal').addEventListener('click', function() {
+        DataLoader.filterByNormal();
+        reset();
+        startAnimation();
+    });
+
+    document.getElementById('filterSubLegendary').addEventListener('click', function() {
+        DataLoader.filterBySubLegendary();
+        reset();
+        startAnimation();
+    });
+
+    document.getElementById('filterLegendary').addEventListener('click', function() {
+        DataLoader.filterByLegendary();
+        reset();
+        startAnimation();
+    });
+
+    document.getElementById('filterMythical').addEventListener('click', function() {
+        DataLoader.filterByMythical();
+        reset();
+        startAnimation();
+    });
+
+    // Pokemon search functionality
+    function searchPokemon(query) {
+        if (!query || query.trim() === '') {
+            return null;
+        }
+
+        const pokemonData = DataLoader.getPokemonData();
+        if (!pokemonData || pokemonData.length === 0) {
+            console.log('Pokemon data not loaded yet');
+            return null;
+        }
+
+        const trimmedQuery = query.trim().toLowerCase();
+        
+        // Check if query is a number (ID search)
+        const isNumeric = /^\d+$/.test(trimmedQuery);
+        
+        if (isNumeric) {
+            // Search by ID
+            const pokemon = pokemonData.find(p => 
+                String(p.pokedex_number).toLowerCase() === trimmedQuery
+            );
+            return pokemon || null;
+        } else {
+            // Search by name (case-insensitive, partial match)
+            const pokemon = pokemonData.find(p => 
+                p.name && p.name.toLowerCase().includes(trimmedQuery)
+            );
+            return pokemon || null;
+        }
+    }
+
+    // Search button click
+    document.getElementById('searchBtn').addEventListener('click', function() {
+        const searchInput = document.getElementById('searchInput');
+        const query = searchInput.value;
+        const pokemon = searchPokemon(query);
+        
+        if (pokemon) {
+            PokemonInfo.displayPokemon(pokemon);
+            searchInput.value = ''; // Clear input
+        } else {
+            alert('Pokemon not found! Please try a different name or ID.');
+        }
+    });
+
+    // Search on Enter key press
+    document.getElementById('searchInput').addEventListener('keypress', function(event) {
+        if (event.key === 'Enter') {
+            document.getElementById('searchBtn').click();
+        }
+    });
+
+    // Log when everything is initialized
+    console.log('Visualization initialized');
+})();

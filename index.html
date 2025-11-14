@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pokemon Generation Physics Visualization</title>
+    <title>⚔️ Pokemon Battle Arena - Master Your Strategy! ⚔️</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
     <style>
@@ -13,15 +13,62 @@
             padding: 20px;
             background: #f0f0f0;
             font-family: Arial, sans-serif;
+            background-image: url('data/2.PIKACHU CHILL.jpg');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #f0f0f0;
+            opacity: 0.7;
+            z-index: -1;
+        }
+
+        /* Main container for left panel and chart */
+        #main-container {
+            display: flex;
+            gap: 20px;
+            width: 100%;
+            margin-top: 20px;
+        }
+
+        /* Left panel - 40% width (2/5) */
+        #left-panel {
+            width: 30%;
+            min-width: 300px;
+            background: transparent;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Chart area - 60% width (3/5) */
+        #chart-area {
+            width: 60%;
+            display: flex;
+            flex-direction: column;
         }
 
         #canvas-container {
             width: 100%;
             height: 80vh;
-            background: white;
+            background: transparent !important;
             border-radius: 10px;
             overflow: hidden;
             position: relative;
+        }
+
+        #canvas-container canvas {
+            background: transparent !important;
         }
 
         #tooltip {
@@ -46,6 +93,44 @@
         #controls {
             margin: 20px 0;
             text-align: center;
+            position: relative;
+        }
+
+        #pokemon-search {
+            position: absolute;
+            top: 0;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        #pokemon-search input {
+            padding: 8px 15px;
+            font-size: 14px;
+            border: 2px solid #4CAF50;
+            border-radius: 20px;
+            outline: none;
+            width: 200px;
+        }
+
+        #pokemon-search input:focus {
+            border-color: #45a049;
+            box-shadow: 0 0 5px rgba(76, 175, 80, 0.3);
+        }
+
+        #pokemon-search button {
+            padding: 8px 20px;
+            font-size: 14px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+        }
+
+        #pokemon-search button:hover {
+            background: #45a049;
         }
 
         button {
@@ -62,25 +147,176 @@
         button:hover {
             background: #45a049;
         }
+
+        /* Left panel content styling */
+        #left-panel h2 {
+            margin-top: 0;
+            color: #080808;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+
+        #left-panel-content {
+            min-height: 400px;
+            transition: opacity 0.3s ease;
+            color: #333;
+        }
+
+        #left-panel-content p,
+        #left-panel-content span,
+        #left-panel-content div {
+            color: #333;
+        }
+
+        .pokemon-header h3 {
+            transition: color 0.3s ease;
+        }
+
+        .info-section {
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Battle filter button styles */
+        .battle-filter-btn {
+            width: 100%;
+            padding: 12px 16px;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .beaten-by-btn {
+            background: #F44336;
+        }
+
+        .beaten-by-btn:hover {
+            background: #D32F2F;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+
+        .can-beat-btn {
+            background: #4CAF50;
+        }
+
+        .can-beat-btn:hover {
+            background: #45a049;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+
+        .battle-filter-btn:disabled {
+            background: #ccc !important;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        .battle-filter-btn:disabled:hover {
+            transform: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        /* Battle visualization view styles */
+        #battle-visualization-view {
+            min-height: 100vh;
+            background: #f5f5f5;
+        }
+
+        #battle-visualization-container {
+            background: transparent;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
     </style>
 </head>
 
 <body>
     <div id="tooltip"></div>
-    <h1 style="text-align:center; margin-top:20px; font-size:2em; color:#333;">Pokemon Generations & Legendary Status
-        Visualization</h1>
+    <h1 style="text-align:center; margin-top:20px; font-size:2.5em; color:#333; text-shadow: 2px 2px 4px rgba(0,0,0,0.1);">
+        ⚔️ Pokemon Battle Arena ⚔️
+        <div style="font-size:0.5em; color:#666; font-weight:normal; margin-top:5px;">Master Your Strategy & Discover Winning Matchups</div>
+    </h1>
     <div id="controls">
         <button id="startBtn" disabled>GO!</button>
         <button id="resetBtn">Reset</button>
+        <button id="filterNormal">Normal</button>
         <button id="filterSubLegendary">Sub-Legendary</button>
         <button id="filterLegendary">Legendary</button>
         <button id="filterMythical">Mythical</button>
+        <div id="pokemon-search">
+            <input type="text" id="searchInput" placeholder="Search Pokemon name or ID...">
+            <button id="searchBtn">Search</button>
+        </div>
     </div>
-    <div id="legend" class="legend" aria-hidden="false" style="position:relative; margin-bottom:10px;"></div>
-    <div id="canvas-container"></div>
+    <!-- Main container with left panel and chart area -->
+    <div id="main-container">
+        <!-- Left Panel (40% width) -->
+        <div id="left-panel">
+            <h2>Pokemon Information</h2>
+            <div id="left-panel-content">
+            </div>
+        </div>
+        
+        <!-- Chart Area (60% width) -->
+        <div id="chart-area">
+            <div id="legend" class="legend" aria-hidden="false" style="position:relative; margin-bottom:10px;"></div>
+            <div id="canvas-container"></div>
+        </div>
+    </div>
+
+    <!-- Battle Visualization View (hidden by default) -->
+    <div id="battle-visualization-view" style="display: none;">
+        <div style="max-width: 1200px; margin: 0 auto; padding: 20px;">
+            <button id="back-btn" style="
+                padding: 10px 20px;
+                background: #2196F3;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-size: 14px;
+                font-weight: 600;
+                cursor: pointer;
+                margin-bottom: 20px;
+                transition: all 0.3s ease;
+            " onmouseover="this.style.background='#1976D2';" 
+            onmouseout="this.style.background='#2196F3';">
+                ← Back to Main View
+            </button>
+            <div id="battle-visualization-container"></div>
+        </div>
+    </div>
+    
     <div id="tooltip"
         style="position:absolute; pointer-events:none; background:rgba(0,0,0,0.8); color:white; padding:6px 8px; border-radius:4px; font-size:13px; display:none; z-index:1000;">
     </div>
+    <!-- Load modules in dependency order -->
+    <script src="js/physics-engine.js"></script>
+    <script src="js/pokemon-ball.js"></script>
+    <script src="js/tooltip.js"></script>
+    <script src="js/legend.js"></script>
+    <script src="js/data-loader.js"></script>
+    <script src="js/battle-analyzer.js"></script>
+    <script src="js/battle-visualization.js"></script>
+    <script src="js/pokemon-info.js"></script>
+    <script src="js/interactions.js"></script>
+    <script src="js/animation.js"></script>
     <script src="js/visualization.js"></script>
 </body>
 
