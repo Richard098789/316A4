@@ -49,7 +49,15 @@ const PokemonBall = (function() {
             return null;
         }
         
-        const radius = 15; // larger for visibility
+        // Calculate dynamic radius based on viewport size
+        // Base size for 4K (3840px width) = 15px
+        // Scale proportionally for other screen sizes
+        const baseWidth = 3840; // 4K reference width
+        const baseRadius = 15; // Base radius for 4K
+        const viewportWidth = window.innerWidth || 1920;
+        // Use square root scaling for more gradual size changes
+        const scaleFactor = Math.sqrt(viewportWidth / baseWidth);
+        const radius = Math.max(10, Math.min(20, baseRadius * scaleFactor));
         
         // Use D3 scale for color assignment (use stored rarityScale from closure)
         const rarity = rarityFor(pokemon);
